@@ -9,7 +9,11 @@ import { Ground } from './Ground'
 
 /**
  * 万象农场 3D 场景（M0 技术验证）：
- * R3F Canvas + 环境光照 + 小狗模型（GLB 管线）+ 轨道相机。
+ * R3F Canvas + 环境光照 + 动物模型（GLB 管线 + 骨骼动画）+ 轨道相机。
+ *
+ * 游走行为（WanderBehavior）暂缓：拉布拉多经体检只有 idle 数据（腿骨幅度 0~0.01rad，
+ * 无步态），套游走会变成「腿不动的滑行」观感差。等接入带 Walk/Run 片段的模型后
+ * 再包回 WanderBehavior 一行启用（组件与状态机均已就绪）。
  */
 export default function FarmScene() {
   return (

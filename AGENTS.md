@@ -13,7 +13,8 @@
 pnpm dev        # 开发（Turbopack）
 pnpm build      # 生产构建
 pnpm lint       # ESLint
-pnpm models:dog # 生成占位小狗（输出 dog-placeholder.glb，不覆盖真实模型）
+pnpm models:dog   # 生成占位小狗（输出 dog-placeholder.glb，不覆盖真实模型）
+pnpm models:inspect <glb>  # 动画通道体检：每根骨骼何时动了多大，判断有无步态数据
 npx tsc --noEmit  # 类型检查（改动后必须跑）
 ```
 
@@ -25,11 +26,14 @@ components/farm/
   SceneMount.tsx         # 'use client' + next/dynamic(ssr:false) —— 唯一的 SSR 边界
   FarmScene.tsx          # R3F Canvas + 光照 + 雾 + 相机
   AnimalModel.tsx        # 通用动物模型（GLB 加载 + 落地校准 + 动画播放）
+  WanderBehavior.tsx     # 程序化游走行为（walk/hop 两种风格），套在校准层外面
+  CameraFollow.tsx       # 轨道相机注视点软跟随游走目标
   CameraControls.tsx     # 轨道相机（后期加第一人称漫游）
   Ground.tsx
 lib/farm/
   assets.ts              # 资产注册表（唯一允许出现模型路径的地方）
   model-utils.ts         # snapToGround 落地校准
+  wander.ts              # WanderBrain 游走状态机（框架无关，车辆巡行可复用）
 public/models/<类别>/     # 优化后的 GLB（animals/buildings/vegetation/vehicles/props）
 assets-src/<类别>/<名称>/ # 第三方原始下载存档（含 license.txt，不进部署产物）
 scripts/                 # 占位模型生成等工具脚本
@@ -43,6 +47,7 @@ scripts/                 # 占位模型生成等工具脚本
 4. **防穿模是硬约束**：OrbitControls 的 `minDistance`（防钻进模型）与 `maxPolarAngle < π/2`（防钻入地下）不可移除。
 5. **`ssr: false` 只能在客户端组件中使用**（Next.js 16 限制），所以 R3F Canvas 必须经 `SceneMount` 这层 'use client' 包裹，不要在 page.tsx 直接 dynamic。
 6. **蒙皮网格（SkinnedMesh）必须 `frustumCulled = false`**，否则动画姿态超出 bind-pose 包围盒时模型会闪现消失。
+7. **行为分层**：整只动物的位移/转向写在 WanderBehavior 外层 group，不碰 AnimalModel 校准层的 position；行为逻辑放 lib/（框架无关），组件只做位姿→节点的搬运。
 
 ## 3D 资产接入流程
 
@@ -66,10 +71,11 @@ pnpm dlx @gltf-transform/cli webp public/models/animals/xxx.glb public/models/an
 ## 已知坑（按复发概率排序）
 
 1. **Sketchfab 预览会动 ≠ 下载包含动画**：接入动物前先 inspect 确认 `animations` 存在；无动画模型静默兼容（AnimalModel 自动跳过播放）。
-2. **`KHR_materials_pbrSpecularGlossiness`（已废弃扩展）**：three 0.186 GLTFLoader 零支持，贴图读不到 → 模型灰白色。必须 `metalrough` 转换。模型变色先查 `extensionsRequired`。
-3. **Node 脚本跑 three**（GLTFExporter 等）需要浏览器 API shim（见 scripts/make-placeholder-dog.cjs 的 FileReader shim）。
-4. **next dev 会自动重写本文件的 nextjs-agent-rules 块**：保留该块提交即可，不要删除。
-5. **浏览器缓存 GLB**：替换同名模型文件后需强刷验证，别误判为代码问题。
+2. **程序化颠簸 ≠ 步态**：只有 idle 片段的模型不要套 WanderBehavior 移动——腿不动整只滑行/浮动，观感很差（用户实测差评）。接入会游走的动物前先 `pnpm models:inspect <glb>` 看腿部通道：幅度周期性 >0.3rad 才算有步态数据（拉布拉多实测腿骨仅 0~0.01rad，纯 idle）。
+3. **`KHR_materials_pbrSpecularGlossiness`（已废弃扩展）**：three 0.186 GLTFLoader 零支持，贴图读不到 → 模型灰白色。必须 `metalrough` 转换。模型变色先查 `extensionsRequired`。
+4. **Node 脚本跑 three**（GLTFExporter 等）需要浏览器 API shim（见 scripts/make-placeholder-dog.cjs 的 FileReader shim）。
+5. **next dev 会自动重写本文件的 nextjs-agent-rules 块**：保留该块提交即可，不要删除。
+6. **浏览器缓存 GLB**：替换同名模型文件后需强刷验证，别误判为代码问题。
 
 ## Git 提交工作流
 
